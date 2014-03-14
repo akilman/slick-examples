@@ -1,6 +1,6 @@
 package com.typesafe.slick.examples.jdbc
 
-import scala.slick.jdbc.{GetResult, StaticQuery => Q}
+import scala.slick.jdbc.{StaticQuery => Q, JdbcBackend, GetResult}
 import scala.slick.jdbc.JdbcBackend.Database
 import Q.interpolation
 
@@ -11,18 +11,9 @@ import Q.interpolation
  */
 object PlainSQL extends App {
 
-  // Case classes for our data
-  case class Supplier(id: Int, name: String, street: String, city: String, state: String, zip: String)
-  case class Coffee(name: String, supID: Int, price: Double, sales: Int, total: Int)
-
-  // Result set getters
-  implicit val getSupplierResult = GetResult(r => Supplier(r.nextInt, r.nextString, r.nextString,
-    r.nextString, r.nextString, r.nextString))
-  implicit val getCoffeeResult = GetResult(r => Coffee(r.<<, r.<<, r.<<, r.<<, r.<<))
-
   Database.forURL("jdbc:h2:mem:test1", driver = "org.h2.Driver") withSession { implicit session =>
 
-    // Create the tables, including primary and foreign keys
+  // Create the tables, including primary and foreign keys
     Q.updateNA("create table suppliers("+
       "id int not null primary key, "+
       "name varchar not null, "+
@@ -55,6 +46,28 @@ object PlainSQL extends App {
       Coffee("French_Roast_Decaf", 49, 9.99, 0, 0)
     ).foreach(insert)
 
+    val app = new SlickApp
+    while (true) {
+      Thread.sleep(1000)
+      app.doWork
+    }
+
+  }
+}
+
+// Case classes for our data
+case class Supplier(id: Int, name: String, street: String, city: String, state: String, zip: String)
+case class Coffee(name: String, supID: Int, price: Double, sales: Int, total: Int)
+
+class SlickApp {
+
+  // Result set getters
+  implicit val getSupplierResult = GetResult(r => Supplier(r.nextInt, r.nextString, r.nextString,
+    r.nextString, r.nextString, r.nextString))
+  implicit val getCoffeeResult = GetResult(r => Coffee(r.<<, r.<<, r.<<, r.<<, r.<<))
+
+
+  def doWork(implicit session: JdbcBackend#Session) = {
     // Iterate through all coffees and output them
     println("Coffees:")
     Q.queryNA[Coffee]("select * from coffees") foreach { c =>
@@ -68,7 +81,7 @@ object PlainSQL extends App {
       select c.name, s.name
       from coffees c, suppliers s
       where c.price < ? and s.id = c.sup_id
-    """)
+                                               """)
     // This time we read the result set into a List
     val l2 = q2.list(9.0)
     for (t <- l2) println("  " + t._1 + " supplied by " + t._2)
@@ -78,11 +91,6 @@ object PlainSQL extends App {
     println("Supplier #49: " + supplierById(49).first)
 
     def coffeeByName(name: String) = sql"select * from coffees where name = $name".as[Coffee]
-    println("Coffee Colombian: " + coffeeByName("Colombian").firstOption)
-
-    def deleteCoffee(name: String) = sqlu"delete from coffees where name = $name".first
-    val rows = deleteCoffee("Colombian")
-    println(s"Deleted $rows rows")
     println("Coffee Colombian: " + coffeeByName("Colombian").firstOption)
   }
 }
